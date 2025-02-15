@@ -245,7 +245,7 @@ pub struct MethodCallSet<'a, C> {
     /// otherwise, the method will be aborted and a stateMismatch error returned. If `None`, any
     /// changes will be applied to the current state.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub if_in_state: Option<&'a Id>,
+    pub if_in_state: Option<&'a State>,
     /// A map of a creation id (a temporary id set by the client) to `Foo` objects, or `None` if no
     /// objects are to be created.
     ///

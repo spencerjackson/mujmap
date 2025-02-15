@@ -905,6 +905,7 @@ impl Remote {
     /// notmuch tags.
     pub fn update(
         &mut self,
+        old_state: &State,
         local_emails: &HashMap<Id, local::Email>,
         mailboxes: &Mailboxes,
         tags_config: &config::Tags,
@@ -994,16 +995,17 @@ impl Remote {
 
         let chunk_size = self.session.capabilities.core.max_objects_in_set as usize;
 
+        let mut last_state = old_state.clone();
+
         for chunk in &updates.into_iter().chunks(chunk_size) {
             let account_id = &self.session.primary_accounts.mail;
             let mut response = self.request(jmap::Request {
                 using: &[jmap::CapabilityKind::Mail],
                 method_calls: &[jmap::RequestInvocation {
                     call: jmap::MethodCall::EmailSet {
-                        // TODO: Set if_in_state. That way, if the remote changes while we're working, we'll start over.
                         set: jmap::MethodCallSet {
                             account_id,
-                            if_in_state: None,
+                            if_in_state: Some(&last_state),
                             create: None,
                             update: Some(chunk.collect::<HashMap<_, _>>()),
                             destroy: None,
@@ -1025,6 +1027,7 @@ impl Remote {
             if let Some(not_updated) = set_response.not_updated {
                 return Err(Error::UpdateEmail { not_updated });
             }
+            last_state = response.session_state;
         }
 
         Ok(())

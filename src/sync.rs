@@ -642,7 +642,7 @@ pub fn sync(
 
     if !args.dry_run {
         remote
-            .update(&updated_local_emails, &mailboxes, &config.tags)
+            .update(&state, &updated_local_emails, &mailboxes, &config.tags)
             .context(PushChangesSnafu {})?;
     }
 
