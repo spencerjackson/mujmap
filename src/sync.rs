@@ -508,7 +508,7 @@ pub fn sync(
                     // matches ours. Fortunately, our generated name (the raw JMAP mailbox.message
                     // id) will always be a substring of notmuch's version (same name with flags
                     // attached), so a starts-with test is enough.
-                    if let Some(mut new_email) = new_emails.get_mut(&remote_email.id) {
+                    if let Some(new_email) = new_emails.get_mut(&remote_email.id) {
                         if let Some(our_filename) = new_email
                             .maildir_path
                             .file_name()

@@ -10,6 +10,7 @@ use std::{
 use super::{EmailKeyword, Id, State};
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 #[serde(rename_all = "camelCase")]
 pub struct Response {
     /// An array of responses. The output of the methods MUST be added to the `method_responses`
@@ -124,6 +125,7 @@ impl<'de> Deserialize<'de> for ResponseInvocation {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 #[serde(rename_all = "camelCase")]
 pub struct MethodResponseGet<T> {
     /// The id of the account used for the call.
@@ -159,6 +161,7 @@ pub struct MethodResponseGet<T> {
 /// - https://github.com/cyrusimap/cyrus-imapd/issues/2671
 /// - https://github.com/cyrusimap/cyrus-imapd/issues/4122
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 #[serde(rename_all = "camelCase")]
 pub struct MethodResponseGetIdentity {
     /// The id of the account used for the call.
@@ -172,6 +175,7 @@ pub struct MethodResponseGetIdentity {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 #[serde(rename_all = "camelCase")]
 pub struct MethodResponseQuery {
     /// The id of the account used for the call.
@@ -214,6 +218,7 @@ pub struct MethodResponseQuery {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 #[serde(rename_all = "camelCase")]
 pub struct MethodResponseChanges {
     /// The id of the account used for the call.
@@ -235,6 +240,7 @@ pub struct MethodResponseChanges {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 #[serde(rename_all = "camelCase")]
 pub struct MethodResponseSet<T> {
     /// The id of the account used for the call.
@@ -273,6 +279,7 @@ pub struct MethodResponseSet<T> {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 #[serde(rename_all = "camelCase")]
 pub struct MethodResponseEmailImport {
     /// The id of the account used for the call.
@@ -532,6 +539,7 @@ impl std::error::Error for MethodResponseError {
 
 /// Response from a blob upload.
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 #[serde(rename_all = "camelCase")]
 pub struct BlobUploadResponse {
     /// The id of the account used for the call.

@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use super::{Id, State};
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     /// An object specifying the capabilities of this server.
@@ -38,6 +39,7 @@ pub struct Session {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct PrimaryAccounts {
     #[serde(rename = "urn:ietf:params:jmap:core")]
     pub core: Id,
@@ -46,6 +48,7 @@ pub struct PrimaryAccounts {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct Capabilities {
     #[serde(rename = "urn:ietf:params:jmap:core")]
     pub core: CoreCapabilities,
@@ -54,6 +57,7 @@ pub struct Capabilities {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 #[serde(rename_all = "camelCase")]
 pub struct CoreCapabilities {
     /// The maximum file size, in octets, that the server will accept for a single file upload (for
@@ -85,6 +89,7 @@ pub struct CoreCapabilities {
 pub struct EmptyCapabilities {}
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     /// A user-friendly string to show when presenting content from this account, e.g., the email
@@ -103,6 +108,7 @@ pub struct Account {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct AccountCapabilities {
     #[serde(rename = "urn:ietf:params:jmap:core")]
     pub core: EmptyCapabilities,
@@ -111,6 +117,7 @@ pub struct AccountCapabilities {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 #[serde(rename_all = "camelCase")]
 pub struct MailAccountCapabilities {
     /// The maximum number of Mailboxes that can be can assigned to a single Email object. This MUST

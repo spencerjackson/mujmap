@@ -926,7 +926,9 @@ impl Remote {
                     }
                 }
 
-                // The remote email may have been destroyed.
+                // Either, the remote email was destroyed while we were syncing,
+                // or, the local email is new.
+                // TODO: If we don't have a remote email, create a new Email object and stuff it into the =create= field.
                 let remote_email = match remote_emails.get(id) {
                     Some(x) => x,
                     None => return None,
@@ -1002,6 +1004,7 @@ impl Remote {
                 using: &[jmap::CapabilityKind::Mail],
                 method_calls: &[jmap::RequestInvocation {
                     call: jmap::MethodCall::EmailSet {
+                        // TODO: Set if_in_state. That way, if the remote changes while we're working, we'll start over.
                         set: jmap::MethodCallSet {
                             account_id,
                             if_in_state: None,
@@ -1278,6 +1281,7 @@ pub struct AvailableMailboxRoles {
 
 /// An object which contains only the properties of a remote Email that mujmap cares about.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Email {
     pub id: Id,
     pub blob_id: Id,

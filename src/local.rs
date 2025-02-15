@@ -213,13 +213,13 @@ impl Local {
             self.db
                 .create_query(query_string)
                 .with_context(|_| CreateNotmuchQuerySnafu {
-                    query: query_string.clone(),
+                    query: query_string,
                 })?;
         query.set_omit_excluded(Exclude::False);
         let messages = query
             .search_messages()
             .with_context(|_| ExecuteNotmuchQuerySnafu {
-                query: query_string.clone(),
+                query: query_string,
             })?;
         Ok(messages
             .into_iter()
