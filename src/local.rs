@@ -19,7 +19,7 @@ use std::path::PathBuf;
 use std::path::StripPrefixError;
 
 const ID_PATTERN: &'static str = r"[-A-Za-z0-9_]+";
-const MAIL_PATTERN: &'static str = formatcp!(r"^({})\.({})(?:$|:)", ID_PATTERN, ID_PATTERN);
+const MAIL_PATTERN: &'static str = formatcp!(r"^(?:({})\.)+({})(?:$|:)", ID_PATTERN, ID_PATTERN);
 
 lazy_static! {
     /// mujmap *must not* touch automatic tags, and should warn if the JMAP server contains
@@ -221,11 +221,15 @@ impl Local {
             .with_context(|_| ExecuteNotmuchQuerySnafu {
                 query: query_string,
             })?;
-        Ok(messages
+        debug!("notmuch results: {:?}", messages);
+
+        let res = Ok(messages
             .into_iter()
             .flat_map(|x| self.emails_from_message(x))
             .map(|x| (x.id.clone(), x))
-            .collect())
+            .collect());
+        debug!("notmuch results: {:?}", res);
+        return res;
     }
 
     /// Get a notmuch Message object for the wanted id.
@@ -247,9 +251,11 @@ impl Local {
             .into_iter()
             .filter(|x| x.starts_with(&self.mail_cur_dir))
             .flat_map(|path| {
+                debug!("hit... {:?}", path);
                 MAIL_FILE
                     .captures(&path.file_name().unwrap().to_string_lossy())
                     .map(|x| {
+                        debug!("hit2...");
                         let id = jmap::Id(x.get(1).unwrap().as_str().to_string());
                         let blob_id = jmap::Id(x.get(2).unwrap().as_str().to_string());
                         (id, blob_id)

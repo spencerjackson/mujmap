@@ -3,15 +3,17 @@ use serde::{Serialize, Serializer, ser::SerializeSeq};
 use serde_json::Value;
 use std::collections::HashMap;
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub enum CapabilityKind {
+    #[serde(rename = "urn:ietf:params:jmap:blob")]
+    Blob,
     #[serde(rename = "urn:ietf:params:jmap:mail")]
     Mail,
     #[serde(rename = "urn:ietf:params:jmap:submission")]
     Submission,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Request<'a> {
     /// The set of capabilities the client wishes to use. The client MAY include capability
@@ -41,6 +43,7 @@ pub struct Request<'a> {
     pub created_ids: Option<HashMap<String, String>>,
 }
 
+#[derive(Debug)]
 pub struct RequestInvocation<'a> {
     pub call: MethodCall<'a>,
     /// An arbitrary string from the client to be echoed back with the responses emitted by that
@@ -85,6 +88,9 @@ impl<'a> Serialize for RequestInvocation<'a> {
             MethodCall::EmailSubmissionSet { .. } => {
                 seq.serialize_element("EmailSubmission/set")?;
             }
+            MethodCall::BlobUpload { .. } => {
+                seq.serialize_element("Blob/upload")?;
+            }
         }
 
         seq.serialize_element(&self.call)?;
@@ -93,7 +99,7 @@ impl<'a> Serialize for RequestInvocation<'a> {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(untagged)]
 pub enum MethodCall<'a> {
     #[serde(rename_all = "camelCase")]
@@ -117,13 +123,15 @@ pub enum MethodCall<'a> {
     #[serde(rename_all = "camelCase")]
     EmailSet {
         #[serde(flatten)]
-        set: MethodCallSet<'a, EmptyCreate>,
+        set: MethodCallSet<'a, HashMap<&'a str, Value>>,
     },
 
     #[serde(rename_all = "camelCase")]
     EmailImport {
         /// The id of the account to use.
         account_id: &'a Id,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        if_in_state: Option<&'a State>,
         /// A map of creation id (client specified) to `EmailImport` objects.
         emails: HashMap<&'a Id, EmailImport<'a>>,
     },
@@ -137,7 +145,7 @@ pub enum MethodCall<'a> {
     #[serde(rename_all = "camelCase")]
     MailboxSet {
         #[serde(flatten)]
-        set: MethodCallSet<'a, MailboxCreate>,
+        set: MethodCallSet<'a, &'a MailboxCreate>,
     },
 
     #[serde(rename_all = "camelCase")]
@@ -158,9 +166,38 @@ pub enum MethodCall<'a> {
         #[serde(skip_serializing_if = "Option::is_none")]
         on_success_update_email: Option<HashMap<&'a Id, HashMap<&'a str, Value>>>,
     },
+
+    #[serde(rename_all = "camelCase")]
+    BlobUpload {
+        #[serde(flatten)]
+        create: MethodCallBlobUpload<'a>,
+    },
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MethodCallBlobUpload<'a> {
+    /// The id of the account to use.
+    pub account_id: &'a Id,
+    pub create: HashMap<&'a Id, UploadObject<'a>>,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DataSourceObject<'a> {
+    #[serde(rename = "data:asBase64")]
+    pub data: &'a str,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadObject<'a> {
+    pub data: Vec<DataSourceObject<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "type")]
+    pub mime_type: Option<&'a str>,
+}
+
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct MethodCallGet<'a> {
     /// The id of the account to use.
@@ -178,7 +215,7 @@ pub struct MethodCallGet<'a> {
     pub properties: Option<&'a [&'a str]>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct MethodCallQuery<'a> {
     /// The id of the account to use.
@@ -217,7 +254,7 @@ pub struct MethodCallQuery<'a> {
     pub calculate_total: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct MethodCallChanges<'a> {
     /// The id of the account to use.
@@ -235,7 +272,7 @@ pub struct MethodCallChanges<'a> {
     pub max_changes: Option<u64>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct MethodCallSet<'a, C> {
     /// The id of the account to use.
@@ -255,7 +292,7 @@ pub struct MethodCallSet<'a, C> {
     /// The client MUST omit any properties that may only be set by the server (for example, the id
     /// property on most object types).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub create: Option<HashMap<&'a Id, &'a C>>,
+    pub create: Option<HashMap<&'a Id, C>>,
     /// A map of an id to a Patch object to apply to the current `Foo` object with that id, or
     /// `None` if no objects are to be updated.
     ///
@@ -295,7 +332,7 @@ pub struct MethodCallSet<'a, C> {
     pub destroy: Option<&'a [&'a Id]>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct EmptyCreate;
 

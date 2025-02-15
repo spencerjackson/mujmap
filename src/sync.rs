@@ -389,6 +389,11 @@ pub fn sync(
         .filter(|(id, _)| !destroyed_ids.contains(&id))
         .collect();
 
+    debug!(
+        "Notmuch revision: {:?}. Updated local emails: {:?}",
+        notmuch_revision, updated_local_emails
+    );
+
     if pull {
         stdout.set_color(&info_color_spec).context(LogSnafu {})?;
         write!(stdout, "Applying changes to notmuch database...").context(LogSnafu {})?;

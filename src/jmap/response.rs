@@ -94,6 +94,10 @@ impl<'de> Deserialize<'de> for ResponseInvocation {
                         seq.next_element::<MethodResponseSet<GenericObjectWithId>>()?
                             .ok_or(length_err)?,
                     )),
+                    "Blob/upload" => Ok(MethodResponse::BlobUpload(
+                        seq.next_element::<MethodResponseBlobUpload>()?
+                            .ok_or(length_err)?,
+                    )),
                     "error" => Ok(MethodResponse::Error(
                         seq.next_element::<MethodResponseError>()?
                             .ok_or(length_err)?,
@@ -256,6 +260,7 @@ pub struct MethodResponseSet<T> {
     /// default by the server.
     ///
     /// This argument is `None` if no `T` objects were successfully created.
+    #[serde(skip_deserializing, default = "default_created")]
     pub created: Option<HashMap<Id, T>>,
     /// The keys in this map are the ids of all `T`s that were successfully updated.
     ///
@@ -278,6 +283,10 @@ pub struct MethodResponseSet<T> {
     pub not_destroyed: Option<HashMap<Id, MethodResponseError>>,
 }
 
+fn default_created<T>() -> Option<HashMap<Id, T>> {
+    None
+}
+
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 #[serde(rename_all = "camelCase")]
@@ -294,6 +303,26 @@ pub struct MethodResponseEmailImport {
     pub created: Option<HashMap<Id, GenericObjectWithId>>,
     /// A map of the creation id to a SetError object for each `Email` that failed to be created, or
     /// `None` if all successful.
+    pub not_created: Option<HashMap<Id, MethodResponseError>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+#[serde(rename_all = "camelCase")]
+pub struct BlobCreated {
+    pub id: Id,
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+#[serde(rename_all = "camelCase")]
+pub struct MethodResponseBlobUpload {
+    /// The id of the account used for the call.
+    pub account_id: Id,
+
+    pub created: Option<HashMap<Id, BlobCreated>>,
+    /// A map of the creation id to a `MethodResponseError` object for each record that failed to be
+    /// created, or `None` if all successful.
     pub not_created: Option<HashMap<Id, MethodResponseError>>,
 }
 
@@ -385,6 +414,8 @@ pub enum MethodResponse {
     EmailChanges(MethodResponseChanges),
     EmailSet(MethodResponseSet<EmptySetUpdated>),
     EmailImport(MethodResponseEmailImport),
+
+    BlobUpload(MethodResponseBlobUpload),
 
     MailboxGet(MethodResponseGet<Mailbox>),
     MailboxSet(MethodResponseSet<GenericObjectWithId>),

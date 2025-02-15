@@ -1,6 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
-    io::{self, Read},
+    fs,
+    io::{self, BufReader, Cursor, Read},
+    path::PathBuf,
     time::Duration,
 };
 
@@ -162,7 +164,12 @@ impl HttpWrapper {
         }
     }
 
-    fn post_json<S: Serialize, D: DeserializeOwned>(&self, url: &str, body: S) -> Result<D> {
+    fn post_json<S: Serialize + std::fmt::Debug, D: DeserializeOwned>(
+        &self,
+        url: &str,
+        body: S,
+    ) -> Result<D> {
+        trace!("Request body: {:?}", serde_json::to_string(&body).unwrap());
         let post = self
             .apply_authorization(self.agent.post(url))
             .send_json(body)
@@ -215,6 +222,8 @@ impl Remote {
             }
         );
 
+        debug!("Got session: {:?}", remote.session);
+
         Ok(remote)
     }
 
@@ -260,6 +269,7 @@ impl Remote {
                 // Server returned success without authentication. Surprising, but valid.
                 let session_url = r.get_url().to_string();
                 let session: jmap::Session = r.into_json().context(ResponseSnafu {})?;
+                debug!("Acquired fresh state: {:?}", session);
                 Ok(Self {
                     http_wrapper: HttpWrapper::new(None, timeout),
                     session_url,
@@ -914,91 +924,132 @@ impl Remote {
         // if we should include any ignored mailboxes in the patch.
         let remote_emails = self.get_emails(local_emails.keys(), mailboxes, tags_config)?;
 
+        // Updates are a list of patches
+        let mut updates: HashMap<&Id, HashMap<&str, Value>> = HashMap::new();
+        // Creation events will be EmailImport statements
+        let mut creates: Vec<(PathBuf, Vec<&Id>, Vec<EmailKeyword>)> = Vec::new();
+
         // Build patches.
-        let updates = local_emails
-            .iter()
-            .flat_map(|(id, local_email)| {
-                let mut patch = HashMap::new();
-                fn as_value(b: bool) -> Value {
-                    if b { Value::Bool(true) } else { Value::Null }
-                }
+        local_emails.iter().for_each(|(id, local_email)| {
+            fn as_value(b: bool) -> Value {
+                if b { Value::Bool(true) } else { Value::Null }
+            }
 
-                // Either, the remote email was destroyed while we were syncing,
-                // or, the local email is new.
-                // TODO: If we don't have a remote email, create a new Email object and stuff it into the =create= field.
-                let remote_email = match remote_emails.get(id) {
-                    Some(x) => x,
-                    None => return None,
-                };
+            // A list of all remote mailbox IDs, corresponding to local tags, which the email should possess
+            let mut new_mailboxes: Vec<&Id> = mailboxes
+                .mailboxes_by_id
+                .values()
+                .filter_map(|v| {
+                    if local_email.tags.contains(&v.tag) {
+                        return Some(&v.id);
+                    } else {
+                        return None;
+                    }
+                })
+                .collect();
 
-                // Keywords.
-                patch.insert(
-                    "keywords/$draft",
-                    as_value(local_email.tags.contains("draft")),
-                );
-                patch.insert(
-                    "keywords/$seen",
-                    as_value(!local_email.tags.contains("unread")),
-                );
-                patch.insert(
-                    "keywords/$flagged",
-                    as_value(local_email.tags.contains("flagged")),
-                );
-                patch.insert(
-                    "keywords/$answered",
-                    as_value(local_email.tags.contains("replied")),
-                );
-                patch.insert(
-                    "keywords/$forwarded",
-                    as_value(local_email.tags.contains("passed")),
-                );
-                if mailboxes.roles.spam.is_none() && !tags_config.spam.is_empty() {
-                    let spam = local_email.tags.contains(&tags_config.spam);
-                    patch.insert("keywords/$junk", as_value(spam));
-                    patch.insert("keywords/$notjunk", as_value(!spam));
-                }
-                if !tags_config.phishing.is_empty() {
+            // If no mailboxes were found, assign to Archive.
+            if new_mailboxes.is_empty() {
+                new_mailboxes.push(&mailboxes.archive_id);
+            }
+
+            match remote_emails.get(id) {
+                Some(remote_email) => {
+                    let mut patch = HashMap::new();
+
+                    // Keywords.
                     patch.insert(
-                        "keywords/$phishing",
-                        as_value(local_email.tags.contains(&tags_config.phishing)),
+                        "keywords/$draft",
+                        as_value(local_email.tags.contains("draft")),
                     );
+                    patch.insert(
+                        "keywords/$seen",
+                        as_value(!local_email.tags.contains("unread")),
+                    );
+                    patch.insert(
+                        "keywords/$flagged",
+                        as_value(local_email.tags.contains("flagged")),
+                    );
+                    patch.insert(
+                        "keywords/$answered",
+                        as_value(local_email.tags.contains("replied")),
+                    );
+                    patch.insert(
+                        "keywords/$forwarded",
+                        as_value(local_email.tags.contains("passed")),
+                    );
+                    if mailboxes.roles.spam.is_none() && !tags_config.spam.is_empty() {
+                        let spam = local_email.tags.contains(&tags_config.spam);
+                        patch.insert("keywords/$junk", as_value(spam));
+                        patch.insert("keywords/$notjunk", as_value(!spam));
+                    }
+                    if !tags_config.phishing.is_empty() {
+                        patch.insert(
+                            "keywords/$phishing",
+                            as_value(local_email.tags.contains(&tags_config.phishing)),
+                        );
+                    }
+
+                    new_mailboxes.extend(
+                        remote_email
+                            .mailbox_ids
+                            .iter()
+                            .filter(|x| mailboxes.ignored_ids.contains(x)),
+                    );
+
+                    patch.insert(
+                        "mailboxIds",
+                        Value::Object(
+                            new_mailboxes
+                                .into_iter()
+                                .map(|x| (x.0.clone(), Value::Bool(true)))
+                                .collect::<serde_json::Map<String, Value>>(),
+                        ),
+                    );
+
+                    updates.insert(id, patch);
                 }
-                // Set mailboxes.
-                // TODO: eliminate clone here?
-                // Include all ignored mailboxes which the remote email is already included in.
-                let mut new_mailboxes: serde_json::Map<String, Value> = remote_email
-                    .mailbox_ids
-                    .iter()
-                    .filter(|x| mailboxes.ignored_ids.contains(x))
-                    .map(|x| (x.0.clone(), Value::Bool(true)))
-                    .collect();
-                // Include all mailboxes which correspond to notmuch tags.
-                new_mailboxes.extend(
-                    mailboxes
-                        .mailboxes_by_id
-                        .values()
-                        .filter(|x| local_email.tags.contains(&x.tag))
-                        .map(|x| (x.id.0.clone(), Value::Bool(true))),
-                );
-                // If no mailboxes were found, assign to Archive.
-                if new_mailboxes.is_empty() {
-                    new_mailboxes.insert(mailboxes.archive_id.0.clone(), Value::Bool(true));
+                None => {
+                    let mut keywords: Vec<EmailKeyword> = Vec::new();
+                    if local_email.tags.contains("draft") {
+                        keywords.push(EmailKeyword::Draft);
+                    }
+
+                    if !local_email.tags.contains("unread") {
+                        keywords.push(EmailKeyword::Seen);
+                    }
+
+                    if local_email.tags.contains("flagged") {
+                        keywords.push(EmailKeyword::Flagged);
+                    }
+
+                    if local_email.tags.contains("replied") {
+                        keywords.push(EmailKeyword::Answered);
+                    }
+
+                    if local_email.tags.contains("passed") {
+                        keywords.push(EmailKeyword::Forwarded);
+                    }
+
+                    creates.push((local_email.path.clone(), new_mailboxes, keywords));
                 }
-                patch.insert("mailboxIds", Value::Object(new_mailboxes));
-                Some(Ok((id, patch)))
-            })
-            .collect::<Result<HashMap<&Id, HashMap<&str, Value>>>>()?;
+            }
+        });
         debug!("Built patch for remote: {:?}", updates);
 
         // Send it off into cyberspace~
         const SET_METHOD_ID: &str = "0";
+        const IMPORT_EMAIL_METHOD_ID: &str = "1";
 
         let chunk_size = self.session.capabilities.core.max_objects_in_set as usize;
 
         let mut last_state = old_state.clone();
+        debug!("State 1: {:?}", last_state);
 
         for chunk in &updates.into_iter().chunks(chunk_size) {
             let account_id = &self.session.primary_accounts.mail;
+
+            //debug!("About to update: {:?}.", chunk);
             let mut response = self.request(jmap::Request {
                 using: &[jmap::CapabilityKind::Mail],
                 method_calls: &[jmap::RequestInvocation {
@@ -1027,7 +1078,110 @@ impl Remote {
             if let Some(not_updated) = set_response.not_updated {
                 return Err(Error::UpdateEmail { not_updated });
             }
-            last_state = response.session_state;
+            last_state = set_response.new_state.unwrap();
+        }
+
+        for chunk in &creates.into_iter().chunks(chunk_size) {
+            let account_id = &self.session.primary_accounts.mail.clone();
+
+            let mut imports: HashMap<&Id, jmap::EmailImport> = HashMap::new();
+            let client_ids: Vec<Id> = (1..=chunk_size).map(|x| Id(x.to_string())).collect();
+
+            // TODO: Batch uploads and imports together
+            for (path, mailboxes, keywords) in chunk {
+                // TODO Figure out how to emit a new error
+                let email = BufReader::new(fs::File::open(path).unwrap());
+
+                let mut stdio_crlf = Cursor::new(Vec::new());
+                loe::process(
+                    &mut email.take(10_000_000),
+                    &mut stdio_crlf,
+                    loe::Config::default().transform(loe::TransformMode::Crlf),
+                )
+                .unwrap();
+
+                let email_string =
+                    base64::encode(String::from_utf8(stdio_crlf.into_inner()).unwrap());
+                let upload = jmap::UploadObject {
+                    data: vec![jmap::DataSourceObject {
+                        data: &email_string,
+                    }],
+                    mime_type: None,
+                };
+
+                let mut response = self.request(jmap::Request {
+                    using: &[jmap::CapabilityKind::Blob],
+                    method_calls: &[jmap::RequestInvocation {
+                        call: jmap::MethodCall::BlobUpload {
+                            create: jmap::MethodCallBlobUpload {
+                                account_id: account_id,
+                                create: HashMap::from([(&Id("0".to_string()), upload)]),
+                            },
+                        },
+                        id: SET_METHOD_ID,
+                    }],
+                    created_ids: None,
+                })?;
+                self.update_session_state(&response.session_state)?;
+
+                if response.method_responses.len() != 1 {
+                    return Err(Error::UnexpectedResponse);
+                }
+
+                let method_response = response.method_responses.pop().unwrap();
+                let blob_upload = match method_response.call {
+                    jmap::MethodResponse::BlobUpload(set) => Ok(set),
+                    jmap::MethodResponse::Error(error) => Err(Error::MethodError { error }),
+                    _ => Err(Error::UnexpectedResponse),
+                }?;
+
+                //let blob_id = self.upload_blob(&email_string)?.blob_id;
+
+                imports.insert(
+                    &client_ids[imports.len()],
+                    jmap::EmailImport {
+                        blob_id: blob_upload.created.unwrap().keys().collect::<Vec<&Id>>()[0]
+                            .clone(),
+                        mailbox_ids: mailboxes
+                            .iter()
+                            .map(|id| (*id, true))
+                            .collect::<HashMap<&Id, bool>>(),
+                        keywords: keywords
+                            .iter()
+                            .map(|keyword| (*keyword, true))
+                            .collect::<HashMap<EmailKeyword, bool>>(),
+                    },
+                );
+
+                self.update_session_state(&response.session_state)?;
+            }
+
+            debug!("State 2: {:?}", Some(&last_state));
+            let mut response = self.request(jmap::Request {
+                using: &[jmap::CapabilityKind::Mail],
+                method_calls: &[jmap::RequestInvocation {
+                    call: jmap::MethodCall::EmailImport {
+                        account_id: account_id,
+                        if_in_state: Some(&last_state),
+                        emails: imports,
+                    },
+                    id: IMPORT_EMAIL_METHOD_ID,
+                }],
+                created_ids: None,
+            })?;
+
+            self.update_session_state(&response.session_state)?;
+
+            if response.method_responses.len() != 1 {
+                return Err(Error::UnexpectedResponse);
+            }
+
+            let import_response =
+                expect_email_import(IMPORT_EMAIL_METHOD_ID, response.method_responses.remove(0))?;
+            map_first_method_error_into_result(import_response.not_created)
+                .context(ImportEmailSnafu {})?;
+
+            //last_state = import_response.new_state.unwrap();
         }
 
         Ok(())
@@ -1084,7 +1238,8 @@ impl Remote {
             method_calls: &[
                 jmap::RequestInvocation {
                     call: jmap::MethodCall::EmailImport {
-                        account_id,
+                        if_in_state: None,
+                        account_id: account_id,
                         emails: HashMap::from([(
                             &*EMAIL_CLIENT_ID,
                             jmap::EmailImport {
@@ -1106,7 +1261,7 @@ impl Remote {
                             if_in_state: None,
                             create: Some(HashMap::from([(
                                 &*EMAIL_SUBMISSION_CLIENT_ID,
-                                &jmap::EmailSubmissionCreate {
+                                jmap::EmailSubmissionCreate {
                                     identity_id: &identity_id,
                                     email_id: &*EMAIL_CLIENT_ID_REF,
                                     envelope: jmap::Envelope {

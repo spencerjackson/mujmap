@@ -54,6 +54,8 @@ pub struct Capabilities {
     pub core: CoreCapabilities,
     #[serde(rename = "urn:ietf:params:jmap:mail")]
     pub mail: EmptyCapabilities,
+    #[serde(rename = "urn:ietf:params:jmap:blob")]
+    pub blob: Option<EmptyCapabilities>,
 }
 
 #[derive(Debug, Deserialize)]
