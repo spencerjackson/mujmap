@@ -7,7 +7,7 @@ use atty::Stream;
 use fslock::LockFile;
 use indicatif::ProgressBar;
 use log::{debug, error, warn};
-use rayon::{prelude::*, ThreadPoolBuildError};
+use rayon::{ThreadPoolBuildError, prelude::*};
 use serde::{Deserialize, Serialize};
 use snafu::prelude::*;
 use std::collections::{HashMap, HashSet};

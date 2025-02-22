@@ -1,6 +1,6 @@
 use serde::{
-    de::{Error, SeqAccess, Visitor},
     Deserialize, Deserializer,
+    de::{Error, SeqAccess, Visitor},
 };
 use std::{
     collections::HashMap,

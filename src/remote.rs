@@ -12,10 +12,10 @@ use crate::{
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, log_enabled, trace, warn};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use snafu::prelude::*;
-use trust_dns_resolver::{error::ResolveError, Resolver};
+use trust_dns_resolver::{Resolver, error::ResolveError};
 use uritemplate::UriTemplate;
 
 #[derive(Debug, Snafu)]
@@ -137,7 +137,7 @@ impl HttpWrapper {
         Ok((session_url, session))
     }
 
-    fn get_reader(&self, url: &str) -> Result<impl Read + Send> {
+    fn get_reader(&self, url: &str) -> Result<impl Read + Send + use<>> {
         Ok(self
             .apply_authorization(self.agent.get(url))
             .call()
@@ -890,7 +890,7 @@ impl Remote {
         Ok(get_response.list)
     }
 
-    pub fn read_email_blob(&self, id: &Id) -> Result<impl Read + Send> {
+    pub fn read_email_blob(&self, id: &Id) -> Result<impl Read + Send + use<>> {
         let uri = UriTemplate::new(self.session.download_url.as_str())
             .set("accountId", self.session.primary_accounts.mail.0.as_str())
             .set("blobId", id.0.as_str())
@@ -919,11 +919,7 @@ impl Remote {
             .flat_map(|(id, local_email)| {
                 let mut patch = HashMap::new();
                 fn as_value(b: bool) -> Value {
-                    if b {
-                        Value::Bool(true)
-                    } else {
-                        Value::Null
-                    }
+                    if b { Value::Bool(true) } else { Value::Null }
                 }
 
                 // Either, the remote email was destroyed while we were syncing,
@@ -1234,8 +1230,7 @@ impl Remote {
         if *session_state != self.session.state {
             trace!(
                 "updating session state from {} to {}",
-                self.session.state,
-                session_state
+                self.session.state, session_state
             );
             let (_, session) =
                 self.http_wrapper
@@ -1324,11 +1319,7 @@ impl Email {
         // Keywords. Consider *only* keywords which are not explicitly disabled by the config and
         // are not already covered by a mailbox.
         fn none_if_empty(s: &str) -> Option<&str> {
-            if s.is_empty() {
-                None
-            } else {
-                Some(s)
-            }
+            if s.is_empty() { None } else { Some(s) }
         }
         let mut tags = HashSet::new();
         for keyword in &keywords {

@@ -1,5 +1,5 @@
 use super::{EmailKeyword, Id, State};
-use serde::{ser::SerializeSeq, Serialize, Serializer};
+use serde::{Serialize, Serializer, ser::SerializeSeq};
 use serde_json::Value;
 use std::collections::HashMap;
 

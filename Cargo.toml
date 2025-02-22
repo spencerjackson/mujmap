@@ -8,7 +8,7 @@ keywords = ["notmuch", "mail", "email", "jmap"]
 categories = ["command-line-utilities", "email"]
 repository = "https://github.com/elizagamedev/mujmap/"
 homepage = "https://github.com/elizagamedev/mujmap/"
-edition = "2021"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
