@@ -2,12 +2,12 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     io::{self, BufReader, Cursor, Read},
-    path::PathBuf,
     time::Duration,
 };
 
 use crate::{
     config::{self, Config},
+    delta_engine::{self, StateDelta},
     jmap::{self, EmailKeyword, Id, MailboxRole, State},
     local,
 };
@@ -924,118 +924,12 @@ impl Remote {
         // if we should include any ignored mailboxes in the patch.
         let remote_emails = self.get_emails(local_emails.keys(), mailboxes, tags_config)?;
 
-        // Updates are a list of patches
-        let mut updates: HashMap<&Id, HashMap<&str, Value>> = HashMap::new();
-        // Creation events will be EmailImport statements
-        let mut creates: Vec<(PathBuf, Vec<&Id>, Vec<EmailKeyword>)> = Vec::new();
-
-        // Build patches.
-        local_emails.iter().for_each(|(id, local_email)| {
-            fn as_value(b: bool) -> Value {
-                if b { Value::Bool(true) } else { Value::Null }
-            }
-
-            // A list of all remote mailbox IDs, corresponding to local tags, which the email should possess
-            let mut new_mailboxes: Vec<&Id> = mailboxes
-                .mailboxes_by_id
-                .values()
-                .filter_map(|v| {
-                    if local_email.tags.contains(&v.tag) {
-                        return Some(&v.id);
-                    } else {
-                        return None;
-                    }
-                })
-                .collect();
-
-            // If no mailboxes were found, assign to Archive.
-            if new_mailboxes.is_empty() {
-                new_mailboxes.push(&mailboxes.archive_id);
-            }
-
-            match remote_emails.get(id) {
-                Some(remote_email) => {
-                    let mut patch = HashMap::new();
-
-                    // Keywords.
-                    patch.insert(
-                        "keywords/$draft",
-                        as_value(local_email.tags.contains("draft")),
-                    );
-                    patch.insert(
-                        "keywords/$seen",
-                        as_value(!local_email.tags.contains("unread")),
-                    );
-                    patch.insert(
-                        "keywords/$flagged",
-                        as_value(local_email.tags.contains("flagged")),
-                    );
-                    patch.insert(
-                        "keywords/$answered",
-                        as_value(local_email.tags.contains("replied")),
-                    );
-                    patch.insert(
-                        "keywords/$forwarded",
-                        as_value(local_email.tags.contains("passed")),
-                    );
-                    if mailboxes.roles.spam.is_none() && !tags_config.spam.is_empty() {
-                        let spam = local_email.tags.contains(&tags_config.spam);
-                        patch.insert("keywords/$junk", as_value(spam));
-                        patch.insert("keywords/$notjunk", as_value(!spam));
-                    }
-                    if !tags_config.phishing.is_empty() {
-                        patch.insert(
-                            "keywords/$phishing",
-                            as_value(local_email.tags.contains(&tags_config.phishing)),
-                        );
-                    }
-
-                    new_mailboxes.extend(
-                        remote_email
-                            .mailbox_ids
-                            .iter()
-                            .filter(|x| mailboxes.ignored_ids.contains(x)),
-                    );
-
-                    patch.insert(
-                        "mailboxIds",
-                        Value::Object(
-                            new_mailboxes
-                                .into_iter()
-                                .map(|x| (x.0.clone(), Value::Bool(true)))
-                                .collect::<serde_json::Map<String, Value>>(),
-                        ),
-                    );
-
-                    updates.insert(id, patch);
-                }
-                None => {
-                    let mut keywords: Vec<EmailKeyword> = Vec::new();
-                    if local_email.tags.contains("draft") {
-                        keywords.push(EmailKeyword::Draft);
-                    }
-
-                    if !local_email.tags.contains("unread") {
-                        keywords.push(EmailKeyword::Seen);
-                    }
-
-                    if local_email.tags.contains("flagged") {
-                        keywords.push(EmailKeyword::Flagged);
-                    }
-
-                    if local_email.tags.contains("replied") {
-                        keywords.push(EmailKeyword::Answered);
-                    }
-
-                    if local_email.tags.contains("passed") {
-                        keywords.push(EmailKeyword::Forwarded);
-                    }
-
-                    creates.push((local_email.path.clone(), new_mailboxes, keywords));
-                }
-            }
-        });
-        debug!("Built patch for remote: {:?}", updates);
+        let StateDelta { updates, creates } = delta_engine::compute_state_delta(
+            &mailboxes,
+            &tags_config,
+            &remote_emails,
+            &local_emails,
+        );
 
         // Send it off into cyberspace~
         const SET_METHOD_ID: &str = "0";
@@ -1088,7 +982,12 @@ impl Remote {
             let client_ids: Vec<Id> = (1..=chunk_size).map(|x| Id(x.to_string())).collect();
 
             // TODO: Batch uploads and imports together
-            for (path, mailboxes, keywords) in chunk {
+            for delta_engine::Create {
+                path,
+                mailboxes,
+                keywords,
+            } in chunk
+            {
                 // TODO Figure out how to emit a new error
                 let email = BufReader::new(fs::File::open(path).unwrap());
 
