@@ -17,6 +17,8 @@ mod send;
 /// Sync command.
 mod sync;
 
+mod delta_engine;
+
 use args::Args;
 use atty::Stream;
 use clap::Parser;
