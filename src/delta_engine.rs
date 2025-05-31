@@ -154,20 +154,40 @@ mod tests {
     use super::*;
     use std::path::Path;
 
+    struct Fixture {
+        mailboxes: Mailboxes,
+        tags: config::Tags,
+        remote_emails: HashMap<Id, Email>,
+        local_emails: HashMap<Id, local::Email>,
+    }
+
+    impl Fixture {
+        fn new() -> Fixture {
+            Fixture {
+                mailboxes: Mailboxes {
+                    archive_id: Id("Archive".to_string()),
+                    mailboxes_by_id: HashMap::<Id, Mailbox>::new(),
+                    ids_by_tag: HashMap::<String, Id>::new(),
+                    ignored_ids: HashSet::<Id>::new(),
+                    roles: AvailableMailboxRoles::default(),
+                },
+                tags: config::Tags::default(),
+                remote_emails: HashMap::<Id, Email>::new(),
+                local_emails: HashMap::<Id, local::Email>::new(),
+            }
+        }
+    }
+
     #[test]
     fn noop_is_noop() {
-        let mailboxes = Mailboxes {
-            archive_id: Id("Archive".to_string()),
-            mailboxes_by_id: HashMap::<Id, Mailbox>::new(),
-            ids_by_tag: HashMap::<String, Id>::new(),
-            ignored_ids: HashSet::<Id>::new(),
-            roles: AvailableMailboxRoles::default(),
-        };
-        let tags = config::Tags::default();
-        let remote_emails = HashMap::<Id, Email>::new();
-        let local_emails = HashMap::<Id, local::Email>::new();
+        let fixture = Fixture::new();
 
-        let result = compute_state_delta(&mailboxes, &tags, &remote_emails, &local_emails);
+        let result = compute_state_delta(
+            &fixture.mailboxes,
+            &fixture.tags,
+            &fixture.remote_emails,
+            &fixture.local_emails,
+        );
 
         assert!(result.updates.len() == 0);
         assert!(result.creates.len() == 0);
@@ -175,16 +195,8 @@ mod tests {
 
     #[test]
     fn new_remote_email() {
-        let mailboxes = Mailboxes {
-            archive_id: Id("Archive".to_string()),
-            mailboxes_by_id: HashMap::<Id, Mailbox>::new(),
-            ids_by_tag: HashMap::<String, Id>::new(),
-            ignored_ids: HashSet::<Id>::new(),
-            roles: AvailableMailboxRoles::default(),
-        };
-        let tags = config::Tags::default();
-        let mut remote_emails = HashMap::<Id, Email>::new();
-        remote_emails.insert(
+        let mut fixture = Fixture::new();
+        fixture.remote_emails.insert(
             Id("1".to_owned()),
             Email {
                 id: Id("1".to_owned()),
@@ -194,9 +206,13 @@ mod tests {
                 tags: HashSet::<String>::new(),
             },
         );
-        let local_emails = HashMap::<Id, local::Email>::new();
 
-        let result = compute_state_delta(&mailboxes, &tags, &remote_emails, &local_emails);
+        let result = compute_state_delta(
+            &fixture.mailboxes,
+            &fixture.tags,
+            &fixture.remote_emails,
+            &fixture.local_emails,
+        );
 
         // TODO The delta engine should handle new remote mail
         assert!(result.updates.len() == 0);
@@ -205,28 +221,24 @@ mod tests {
 
     #[test]
     fn new_local_email() {
-        let mailboxes = Mailboxes {
-            archive_id: Id("Archive".to_string()),
-            mailboxes_by_id: HashMap::<Id, Mailbox>::new(),
-            ids_by_tag: HashMap::<String, Id>::new(),
-            ignored_ids: HashSet::<Id>::new(),
-            roles: AvailableMailboxRoles::default(),
-        };
-        let tags = config::Tags::default();
-        let remote_emails = HashMap::<Id, Email>::new();
-        let mut local_emails = HashMap::<Id, local::Email>::new();
-        local_emails.insert(
+        let mut fixture = Fixture::new();
+        fixture.local_emails.insert(
             Id("1".to_owned()),
             local::Email {
                 id: Id("1".to_owned()),
                 blob_id: Id("ffff".to_owned()),
                 message_id: "l1".to_owned(),
                 path: PathBuf::from("/home/user/.mail"),
-                tags: HashSet::<String>::from(["hello".to_owned()]),
+                tags: HashSet::<String>::from([]),
             },
         );
 
-        let result = compute_state_delta(&mailboxes, &tags, &remote_emails, &local_emails);
+        let result = compute_state_delta(
+            &fixture.mailboxes,
+            &fixture.tags,
+            &fixture.remote_emails,
+            &fixture.local_emails,
+        );
 
         assert!(result.updates.len() == 0);
         assert!(result.creates.len() == 1);
@@ -241,16 +253,8 @@ mod tests {
 
     #[test]
     fn updated_email() {
-        let mailboxes = Mailboxes {
-            archive_id: Id("Archive".to_string()),
-            mailboxes_by_id: HashMap::<Id, Mailbox>::new(),
-            ids_by_tag: HashMap::<String, Id>::new(),
-            ignored_ids: HashSet::<Id>::new(),
-            roles: AvailableMailboxRoles::default(),
-        };
-        let tags = config::Tags::default();
-        let mut remote_emails = HashMap::<Id, Email>::new();
-        remote_emails.insert(
+        let mut fixture = Fixture::new();
+        fixture.remote_emails.insert(
             Id("1".to_owned()),
             Email {
                 id: Id("1".to_owned()),
@@ -260,8 +264,7 @@ mod tests {
                 tags: HashSet::<String>::from(["hello".to_owned()]),
             },
         );
-        let mut local_emails = HashMap::<Id, local::Email>::new();
-        local_emails.insert(
+        fixture.local_emails.insert(
             Id("1".to_owned()),
             local::Email {
                 id: Id("1".to_owned()),
@@ -272,7 +275,12 @@ mod tests {
             },
         );
 
-        let result = compute_state_delta(&mailboxes, &tags, &remote_emails, &local_emails);
+        let result = compute_state_delta(
+            &fixture.mailboxes,
+            &fixture.tags,
+            &fixture.remote_emails,
+            &fixture.local_emails,
+        );
 
         assert!(result.updates.len() == 1);
         assert!(result.creates.len() == 0);
