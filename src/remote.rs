@@ -999,48 +999,15 @@ impl Remote {
                 )
                 .unwrap();
 
-                let email_string =
-                    base64::encode(String::from_utf8(stdio_crlf.into_inner()).unwrap());
-                let upload = jmap::UploadObject {
-                    data: vec![jmap::DataSourceObject {
-                        data: &email_string,
-                    }],
-                    mime_type: None,
-                };
+                let email_string = String::from_utf8(stdio_crlf.into_inner()).unwrap();
 
-                let mut response = self.request(jmap::Request {
-                    using: &[jmap::CapabilityKind::Core, jmap::CapabilityKind::Blob],
-                    method_calls: &[jmap::RequestInvocation {
-                        call: jmap::MethodCall::BlobUpload {
-                            create: jmap::MethodCallBlobUpload {
-                                account_id: account_id,
-                                create: HashMap::from([(&Id("0".to_string()), upload)]),
-                            },
-                        },
-                        id: SET_METHOD_ID,
-                    }],
-                    created_ids: None,
-                })?;
-                self.update_session_state(&response.session_state)?;
-
-                if response.method_responses.len() != 1 {
-                    return Err(Error::UnexpectedResponse);
-                }
-
-                let method_response = response.method_responses.pop().unwrap();
-                let blob_upload = match method_response.call {
-                    jmap::MethodResponse::BlobUpload(set) => Ok(set),
-                    jmap::MethodResponse::Error(error) => Err(Error::MethodError { error }),
-                    _ => Err(Error::UnexpectedResponse),
-                }?;
-
-                //let blob_id = self.upload_blob(&email_string)?.blob_id;
+                debug!("Email: {:?}", email_string);
+                let blob_id = self.upload_blob(&email_string)?.blob_id;
 
                 imports.insert(
                     &client_ids[imports.len()],
                     jmap::EmailImport {
-                        blob_id: blob_upload.created.unwrap().keys().collect::<Vec<&Id>>()[0]
-                            .clone(),
+                        blob_id: blob_id,
                         mailbox_ids: mailboxes
                             .iter()
                             .map(|id| (*id, true))
@@ -1052,7 +1019,7 @@ impl Remote {
                     },
                 );
 
-                self.update_session_state(&response.session_state)?;
+                //  self.update_session_state(&response.session_state)?;
             }
 
             debug!("State 2: {:?}", Some(&last_state));
@@ -1061,7 +1028,7 @@ impl Remote {
                 method_calls: &[jmap::RequestInvocation {
                     call: jmap::MethodCall::EmailImport {
                         account_id: account_id,
-                        if_in_state: Some(&last_state),
+                        if_in_state: None,
                         emails: imports,
                     },
                     id: IMPORT_EMAIL_METHOD_ID,

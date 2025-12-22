@@ -5,8 +5,6 @@ use std::collections::HashMap;
 
 #[derive(Serialize, Debug)]
 pub enum CapabilityKind {
-    #[serde(rename = "urn:ietf:params:jmap:blob")]
-    Blob,
     #[serde(rename = "urn:ietf:params:jmap:core")]
     Core,
     #[serde(rename = "urn:ietf:params:jmap:mail")]
@@ -90,9 +88,6 @@ impl<'a> Serialize for RequestInvocation<'a> {
             MethodCall::EmailSubmissionSet { .. } => {
                 seq.serialize_element("EmailSubmission/set")?;
             }
-            MethodCall::BlobUpload { .. } => {
-                seq.serialize_element("Blob/upload")?;
-            }
         }
 
         seq.serialize_element(&self.call)?;
@@ -168,35 +163,6 @@ pub enum MethodCall<'a> {
         #[serde(skip_serializing_if = "Option::is_none")]
         on_success_update_email: Option<HashMap<&'a Id, HashMap<&'a str, Value>>>,
     },
-
-    #[serde(rename_all = "camelCase")]
-    BlobUpload {
-        #[serde(flatten)]
-        create: MethodCallBlobUpload<'a>,
-    },
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct MethodCallBlobUpload<'a> {
-    /// The id of the account to use.
-    pub account_id: &'a Id,
-    pub create: HashMap<&'a Id, UploadObject<'a>>,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct DataSourceObject<'a> {
-    #[serde(rename = "data:asBase64")]
-    pub data: &'a str,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct UploadObject<'a> {
-    pub data: Vec<DataSourceObject<'a>>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "type")]
-    pub mime_type: Option<&'a str>,
 }
 
 #[derive(Serialize, Debug)]
@@ -333,10 +299,6 @@ pub struct MethodCallSet<'a, C> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub destroy: Option<&'a [&'a Id]>,
 }
-
-#[derive(Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct EmptyCreate;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

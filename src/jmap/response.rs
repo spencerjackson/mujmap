@@ -94,10 +94,6 @@ impl<'de> Deserialize<'de> for ResponseInvocation {
                         seq.next_element::<MethodResponseSet<GenericObjectWithId>>()?
                             .ok_or(length_err)?,
                     )),
-                    "Blob/upload" => Ok(MethodResponse::BlobUpload(
-                        seq.next_element::<MethodResponseBlobUpload>()?
-                            .ok_or(length_err)?,
-                    )),
                     "error" => Ok(MethodResponse::Error(
                         seq.next_element::<MethodResponseError>()?
                             .ok_or(length_err)?,
@@ -306,26 +302,6 @@ pub struct MethodResponseEmailImport {
     pub not_created: Option<HashMap<Id, MethodResponseError>>,
 }
 
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-#[serde(rename_all = "camelCase")]
-pub struct BlobCreated {
-    pub id: Id,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-#[serde(rename_all = "camelCase")]
-pub struct MethodResponseBlobUpload {
-    /// The id of the account used for the call.
-    pub account_id: Id,
-
-    pub created: Option<HashMap<Id, BlobCreated>>,
-    /// A map of the creation id to a `MethodResponseError` object for each record that failed to be
-    /// created, or `None` if all successful.
-    pub not_created: Option<HashMap<Id, MethodResponseError>>,
-}
-
 /// Struct for updates in a call to `T/set` which we don't care about.
 #[derive(Debug, Deserialize)]
 pub struct EmptySetUpdated;
@@ -414,8 +390,6 @@ pub enum MethodResponse {
     EmailChanges(MethodResponseChanges),
     EmailSet(MethodResponseSet<EmptySetUpdated>),
     EmailImport(MethodResponseEmailImport),
-
-    BlobUpload(MethodResponseBlobUpload),
 
     MailboxGet(MethodResponseGet<Mailbox>),
     MailboxSet(MethodResponseSet<GenericObjectWithId>),
