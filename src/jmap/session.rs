@@ -41,8 +41,6 @@ pub struct Session {
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct PrimaryAccounts {
-    #[serde(rename = "urn:ietf:params:jmap:core")]
-    pub core: Id,
     #[serde(rename = "urn:ietf:params:jmap:mail")]
     pub mail: Id,
 }
@@ -112,8 +110,9 @@ pub struct Account {
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct AccountCapabilities {
+    // The spec is ambiguous whether this cap should exist
     #[serde(rename = "urn:ietf:params:jmap:core")]
-    pub core: EmptyCapabilities,
+    pub core: Option<EmptyCapabilities>,
     #[serde(rename = "urn:ietf:params:jmap:mail")]
     pub mail: MailAccountCapabilities,
 }
