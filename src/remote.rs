@@ -144,10 +144,7 @@ impl HttpWrapper {
             .apply_authorization(self.agent.get(url))
             .call()
             .context(ReadEmailBlobSnafu {})?
-            .into_reader()
-            // Limiting download size as advised by ureq's documentation:
-            // https://docs.rs/ureq/latest/ureq/struct.Response.html#method.into_reader
-            .take(10_000_000))
+            .into_reader())
     }
 
     fn post_string<D: DeserializeOwned>(&self, url: &str, body: &str) -> Result<D> {
