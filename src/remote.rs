@@ -11,6 +11,7 @@ use crate::{
     jmap::{self, EmailKeyword, Id, MailboxRole, State},
     local,
 };
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use log::{debug, log_enabled, trace, warn};
@@ -282,7 +283,7 @@ impl Remote {
                     };
                     format!(
                         "Basic {}",
-                        base64::encode(format!("{}:{}", safe_username, password))
+                        BASE64_STANDARD.encode(format!("{}:{}", safe_username, password))
                     )
                 }
 
